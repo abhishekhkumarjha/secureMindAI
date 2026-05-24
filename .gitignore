@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Environment and local data
+.env
+*.log
+ai_models/datasets/
+ai_models/trained_models/*
+!ai_models/trained_models/.gitkeep
+
+# Frontend
+ui/node_modules/
+ui/dist/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

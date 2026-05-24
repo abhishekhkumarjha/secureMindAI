@@ -1,0 +1,6 @@
+{
+  "name": "SecureMind AI",
+  "description": "An enterprise-grade, AI-powered cybersecurity Security Operations Center (SOC) platform for dynamic threat monitoring, automated response, and incident investigation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
