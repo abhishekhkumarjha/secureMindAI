@@ -20,6 +20,7 @@ import SettingsView from './components/SettingsView';
 
 import { ActiveView } from './types';
 import { mockThreats, mockIncidents } from './mockData';
+import { clearAuthToken, getAuthToken, getProfile } from './api';
 
 interface SystemNotification {
   id: string;
@@ -35,6 +36,16 @@ export default function App() {
   
   // Real-time toast notifications
   const [notifications, setNotifications] = useState<SystemNotification[]>([]);
+
+  useEffect(() => {
+    if (!getAuthToken()) return;
+    getProfile()
+      .then(({ user }) => {
+        setUserEmail(user.email);
+        setIsAuthenticated(true);
+      })
+      .catch(() => clearAuthToken());
+  }, []);
 
   // Push notification helper
   const triggerSystemNotification = (message: string, type: 'info' | 'success' | 'warn' | 'error') => {
@@ -74,6 +85,7 @@ export default function App() {
 
   const handleLogout = () => {
     triggerSystemNotification('Security session destroyed.', 'info');
+    clearAuthToken();
     setIsAuthenticated(false);
     setUserEmail('');
     setCurrentView('dashboard');

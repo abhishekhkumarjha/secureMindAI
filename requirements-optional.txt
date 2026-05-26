@@ -1,0 +1,3 @@
+# TensorFlow does not currently provide Windows wheels for Python 3.14.
+# Use Python 3.10-3.12 for the LSTM login behavior model.
+tensorflow>=2.12.0

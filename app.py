@@ -1,8 +1,12 @@
 from __future__ import annotations
+from datetime import datetime, timezone
+import hashlib
+import hmac
 from pathlib import Path
-from typing import Any, Dict, List
+import secrets
+from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -39,6 +43,177 @@ class LoginRequest(BaseModel):
     session_duration: float
 
 
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: Literal["admin", "security_user"] = "security_user"
+
+
+class AuthRequest(BaseModel):
+    email: str
+    password: str
+
+
+class SecurityLogRequest(BaseModel):
+    message: str
+    source: str
+    destination: str
+    severity: Literal["critical", "high", "medium", "low"]
+    type: Literal["Firewall", "VPC Flows", "EDR Agent", "SSO Auth", "Kubernetes Audit", "WAF"]
+    action: Literal["BLOCKED", "ALLOWED", "ALERTED", "QUARANTINED"]
+    payload: Dict[str, Any] = {}
+
+
+class DetectRequest(BaseModel):
+    features: Optional[List[float]] = None
+    log: Optional[SecurityLogRequest] = None
+
+
+class InvestigateRequest(BaseModel):
+    incident_id: str
+    note: Optional[str] = None
+    action: Optional[str] = None
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def _auth_error() -> HTTPException:
+    return HTTPException(status_code=401, detail="Authentication required")
+
+
+USERS: Dict[str, Dict[str, Any]] = {
+    "abhishek.jha@securemind.ai": {
+        "name": "Abhishek Kumar Jha",
+        "email": "abhishek.jha@securemind.ai",
+        "role": "admin",
+        "password_hash": _hash_password("SOCOperational@2026!"),
+    }
+}
+SESSIONS: Dict[str, str] = {}
+
+LOGS: List[Dict[str, Any]] = [
+    {
+        "id": "LOG-882201",
+        "timestamp": "2026-05-24T08:01:45Z",
+        "message": "WAF detected Signature Injection in customer API query: union-based extract attempts detected",
+        "source": "185.220.101.44",
+        "destination": "10.140.50.15",
+        "severity": "critical",
+        "type": "WAF",
+        "action": "BLOCKED",
+        "payload": {"ruleID": "942100-SQLi-Union", "relevanceScore": 98},
+    },
+    {
+        "id": "LOG-882204",
+        "timestamp": "2026-05-24T07:59:15Z",
+        "message": "IP Address blocked due to excessive SSH login trials",
+        "source": "45.143.203.111",
+        "destination": "10.140.10.8",
+        "severity": "medium",
+        "type": "Firewall",
+        "action": "BLOCKED",
+        "payload": {"port": 22, "firewallRule": "BlockBruteForceSSH_EdgeGlobal"},
+    },
+]
+
+THREATS: List[Dict[str, Any]] = [
+    {
+        "id": "THR-782",
+        "title": "Distributed SQL Injection & Data Extraction",
+        "category": "Web Application Attack",
+        "riskScore": 94,
+        "severity": "critical",
+        "timestamp": "2026-05-24T07:44:12Z",
+        "source": "185.220.101.44 (Tor Exit Node)",
+        "destination": "customer-db-primary.prod.securemind.ai",
+        "status": "Active",
+        "attackVector": "CVE-2025-4421",
+        "affectedAssets": ["db-server-01a", "billing-api-v2"],
+        "cve": "CVE-2025-4421",
+        "description": "Union-based SQL injection attempts are targeting the customer billing endpoint.",
+        "aiExplanation": "Block Tor-associated CIDRs and apply strict query sanitization on billing-api-v2.",
+    },
+    {
+        "id": "THR-294",
+        "title": "SSH Hard Bruteforce on Public Jump-Host",
+        "category": "Credential Cracking",
+        "riskScore": 64,
+        "severity": "medium",
+        "timestamp": "2026-05-24T07:59:00Z",
+        "source": "45.143.203.111",
+        "destination": "jump.prod.securemind.ai",
+        "status": "Active",
+        "attackVector": "SSH Dictionary Attack",
+        "affectedAssets": ["jump-host-external-01"],
+        "description": "High-volume failed SSH authentication attempts were detected.",
+        "aiExplanation": "Blacklist the source IP and keep MFA enforced on the jump host.",
+    },
+]
+
+INCIDENTS: List[Dict[str, Any]] = [
+    {
+        "id": "INC-2026-0041",
+        "title": "Multi-Stage Intrusion Investigation (APT-39)",
+        "severity": "critical",
+        "riskScore": 96,
+        "status": "Open",
+        "category": "Targeted Attack / Intrusion",
+        "assignedTo": "SecOps Team Lead",
+        "timestamp": "2026-05-24T07:44:12Z",
+        "rootCause": "Compromised credentials followed by lateral movement and SQL injection.",
+        "description": "A correlated incident joining SSO, endpoint, WAF, and database telemetry.",
+        "timeline": [
+            {
+                "id": "t-1",
+                "timestamp": "06:12:05",
+                "title": "Initial SSO Access",
+                "description": "Suspicious login from a Tor-associated source.",
+                "source": "AzureAD SSO Logs",
+                "type": "alert",
+            }
+        ],
+        "nodes": [
+            {"id": "1", "label": "Tor Operator", "type": "attacker", "status": "danger", "ip": "185.220.101.44"},
+            {"id": "2", "label": "Cloud Gateway Edge", "type": "firewall", "status": "warning", "ip": "10.140.10.1"},
+        ],
+        "edges": [{"from": "1", "to": "2", "type": "blocked", "label": "WAF Rate Limit"}],
+        "recommendations": [
+            "Revoke active SSO refresh tokens.",
+            "Deploy WAF rule for union-select payloads.",
+            "Quarantine the suspected workstation.",
+        ],
+        "notes": ["AI Bot: Incident opened from correlated high-risk telemetry."],
+    }
+]
+
+
+def _current_user(authorization: str | None) -> Dict[str, Any]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise _auth_error()
+    token = authorization.removeprefix("Bearer ").strip()
+    email = SESSIONS.get(token)
+    if email is None or email not in USERS:
+        raise _auth_error()
+    user = USERS[email].copy()
+    user.pop("password_hash", None)
+    return user
+
+
+def _classify_log_risk(log: SecurityLogRequest) -> Dict[str, Any]:
+    severity_score = {"critical": 95, "high": 82, "medium": 58, "low": 25}[log.severity]
+    action_modifier = {"QUARANTINED": 5, "BLOCKED": 0, "ALERTED": 8, "ALLOWED": -10}[log.action]
+    risk_score = max(0, min(100, severity_score + action_modifier))
+    prediction = "Malicious" if risk_score >= 80 else "Suspicious" if risk_score >= 50 else "Normal"
+    return {"prediction": prediction, "confidence": round(risk_score / 100, 2), "risk_score": risk_score}
+
+
 def _prediction_error(error: Exception) -> HTTPException:
     if isinstance(error, (FileNotFoundError, ImportError)):
         return HTTPException(status_code=503, detail=str(error))
@@ -50,6 +225,38 @@ def _prediction_error(error: Exception) -> HTTPException:
 @app.get("/api/health")
 def health() -> Dict[str, str]:
     return {"status": "ok", "service": "SecureMind AI"}
+
+
+@app.post("/register")
+def register(request: RegisterRequest) -> Dict[str, Any]:
+    email = request.email.strip().lower()
+    if email in USERS:
+        raise HTTPException(status_code=409, detail="User already exists")
+    USERS[email] = {
+        "name": request.name.strip(),
+        "email": email,
+        "role": request.role,
+        "password_hash": _hash_password(request.password),
+    }
+    return {"message": "User registered", "email": email, "role": request.role}
+
+
+@app.post("/login")
+def login(request: AuthRequest) -> Dict[str, Any]:
+    email = request.email.strip().lower()
+    user = USERS.get(email)
+    if user is None or not hmac.compare_digest(user["password_hash"], _hash_password(request.password)):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = secrets.token_urlsafe(32)
+    SESSIONS[token] = email
+    profile = user.copy()
+    profile.pop("password_hash", None)
+    return {"access_token": token, "token_type": "bearer", "user": profile}
+
+
+@app.get("/profile")
+def profile(authorization: str | None = Header(default=None)) -> Dict[str, Any]:
+    return {"user": _current_user(authorization)}
 
 
 @app.get("/api/models/status")
@@ -74,6 +281,80 @@ def model_status() -> Dict[str, Any]:
             },
         },
     }
+
+
+@app.get("/logs")
+def get_logs(authorization: str | None = Header(default=None)) -> List[Dict[str, Any]]:
+    _current_user(authorization)
+    return LOGS
+
+
+@app.post("/logs")
+def create_log(request: SecurityLogRequest, authorization: str | None = Header(default=None)) -> Dict[str, Any]:
+    _current_user(authorization)
+    row = request.model_dump()
+    row["id"] = f"LOG-{secrets.randbelow(900000) + 100000}"
+    row["timestamp"] = _now_iso()
+    LOGS.insert(0, row)
+    return row
+
+
+@app.delete("/logs")
+def delete_logs(authorization: str | None = Header(default=None)) -> Dict[str, Any]:
+    user = _current_user(authorization)
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can delete logs")
+    count = len(LOGS)
+    LOGS.clear()
+    return {"deleted": count}
+
+
+@app.get("/threats")
+def get_threats(authorization: str | None = Header(default=None)) -> List[Dict[str, Any]]:
+    _current_user(authorization)
+    return THREATS
+
+
+@app.post("/detect")
+def detect(request: DetectRequest, authorization: str | None = Header(default=None)) -> Dict[str, Any]:
+    _current_user(authorization)
+    if request.features is not None:
+        return api_predict_threat(ThreatRequest(features=request.features))
+    if request.log is not None:
+        result = _classify_log_risk(request.log)
+        return {
+            **result,
+            "recommendation": "Investigate immediately" if result["risk_score"] >= 80 else "Monitor and correlate",
+        }
+    raise HTTPException(status_code=400, detail="Provide either features or log for detection")
+
+
+@app.get("/incidents")
+def get_incidents(authorization: str | None = Header(default=None)) -> List[Dict[str, Any]]:
+    _current_user(authorization)
+    return INCIDENTS
+
+
+@app.post("/investigate")
+def investigate(request: InvestigateRequest, authorization: str | None = Header(default=None)) -> Dict[str, Any]:
+    user = _current_user(authorization)
+    incident = next((item for item in INCIDENTS if item["id"] == request.incident_id), None)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    if request.note:
+        incident["notes"].insert(0, f"{_now_iso()} - {user['email']}: {request.note}")
+    if request.action:
+        incident["timeline"].append(
+            {
+                "id": f"t-{len(incident['timeline']) + 1}",
+                "timestamp": datetime.now().strftime("%H:%M:%S"),
+                "title": "Investigation Action",
+                "description": request.action,
+                "source": user["email"],
+                "type": "action",
+            }
+        )
+    return incident
 
 
 @app.post("/api/predict/threat")
@@ -148,7 +429,7 @@ if not UI_DIST_DIR.exists():
             <label for="login-time">Login Time (hour)</label>
             <input id="login-time" type="number" value="14" />
             <label for="login-location">Login Location</label>
-            <input id="login-location" type="text" value="US" />
+            <input id="login-location" type="text" value="India" />
             <label for="device-type">Device Type</label>
             <input id="device-type" type="text" value="desktop" />
             <label for="failed-attempts">Failed Attempts</label>

@@ -261,12 +261,12 @@ export default function DashboardView({
               </g>
 
               {/* Threat trajectories (Curved paths using quadratic bezier curves) */}
-              {/* Point 1: Germany SSH Botnet Host */}
+              {/* Point 1: Pakistan SSH Botnet Host */}
               <path d="M 480 140 Q 340 110 200 180" fill="none" stroke="#f97316" strokeWidth="1.5" strokeDasharray="5,3" className="animate-pulse" />
-              {/* Point 2: Tor SQLi Attacker (Mid-Atlantic/Europe) */}
+              {/* Point 2: Bangladesh SQLi Attacker */}
               <path d="M 410 200 Q 300 160 200 180" fill="none" stroke="#ef4444" strokeWidth="2" />
               <circle cx="410" cy="200" r="4" fill="#ef4444" className="animate-pulse" />
-              {/* Point 3: Singapore SSH Probe */}
+              {/* Point 3: Sri Lanka SSH Probe */}
               <path d="M 720 280 Q 460 190 200 180" fill="none" stroke="#eab308" strokeWidth="1" strokeDasharray="3,3" />
 
               {/* Threat Source Pinpoints with Hover triggers */}
@@ -279,8 +279,11 @@ export default function DashboardView({
                 if (geo.risk === 'critical') { cx = 410; cy = 200; color = "#ef4444"; }
                 else if (geo.risk === 'high') { cx = 480; cy = 140; color = "#f97316"; }
                 else if (geo.risk === 'medium') { cx = 720; cy = 280; color = "#eab308"; }
-                else if (geo.country === 'Brazil') { cx = 220; cy = 340; color = "#22c55e"; }
-                else if (geo.country === 'United States') { cx = 150; cy = 160; color = "#3b82f6"; }
+                else if (geo.country === 'Nepal') { cx = 220; cy = 340; color = "#22c55e"; }
+                else if (geo.country === 'India') { cx = 150; cy = 160; color = "#3b82f6"; }
+                else if (geo.country === 'Sri Lanka') { cx = 760; cy = 280; color = "#eab308"; }
+                else if (geo.country === 'Bangladesh') { cx = 720; cy = 240; color = "#ef4444"; }
+                else if (geo.country === 'Pakistan') { cx = 680; cy = 210; color = "#f97316"; }
 
                 return (
                   <g 

@@ -4,7 +4,7 @@ import {
   ChevronRight, AlertTriangle, PlayCircle, Eye, EyeOff, Layers, ExternalLink, Sparkles
 } from 'lucide-react';
 import { mockThreats } from '../mockData';
-import { detectAnomaly, detectLoginBehavior, getModelStatus, ModelStatus, predictThreat as runThreatPrediction, PredictionResult } from '../api';
+import { detectAnomaly, detectLoginBehavior, fetchThreats, getModelStatus, ModelStatus, predictThreat as runThreatPrediction, PredictionResult } from '../api';
 import { Threat } from '../types';
 
 interface ThreatsViewProps {
@@ -28,20 +28,27 @@ export default function ThreatsView({ triggerSystemNotification }: ThreatsViewPr
   const [isPredicting, setIsPredicting] = useState(false);
   const [loginPayload, setLoginPayload] = useState({
     login_time: 14,
-    login_location: 'US',
+    login_location: 'India',
     device_type: 'desktop',
     failed_attempts: 0,
     session_duration: 15,
   });
 
   useEffect(() => {
+    fetchThreats()
+      .then(data => {
+        setThreats(data);
+        if (data[0]) setInspectedThreat(data[0]);
+      })
+      .catch(() => triggerSystemNotification('Using local demo threats because the threat API is unavailable.', 'warn'));
+
     getModelStatus()
       .then(setModelStatus)
       .catch(() => triggerSystemNotification('Model status endpoint is unavailable.', 'warn'));
   }, []);
 
   // Unique lists for filters
-  const categories = ['all', ...Array.from(new Set(mockThreats.map(t => t.category)))];
+  const categories: string[] = ['all', ...Array.from(new Set<string>(threats.map(t => t.category)))];
 
   // Filtering Logic
   const filteredThreats = threats.filter(threat => {

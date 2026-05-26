@@ -18,6 +18,10 @@ This repository contains the SecureMind AI machine learning module for cybersecu
    ```bash
    pip install -r requirements.txt
    ```
+   For the optional TensorFlow LSTM login model, use Python 3.10-3.12 and install:
+   ```bash
+   pip install -r requirements-optional.txt
+   ```
 3. Install the UI dependencies:
    ```bash
    cd ui

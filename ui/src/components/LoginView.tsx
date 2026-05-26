@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Shield, Lock, Mail, CheckCircle2, AlertOctagon, Terminal, Sparkles, ChevronRight, HelpCircle } from 'lucide-react';
+import { loginUser } from '../api';
 
 interface LoginViewProps {
   onLoginSuccess: (email: string) => void;
@@ -78,7 +79,7 @@ export default function LoginView({ onLoginSuccess, triggerSystemNotification }:
     };
   }, []);
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorText('');
 
@@ -89,11 +90,15 @@ export default function LoginView({ onLoginSuccess, triggerSystemNotification }:
 
     setLoggingIn(true);
 
-    // Simulate standard corporate authorization callback
-    setTimeout(() => {
+    try {
+      await loginUser(email, password);
       setLoggingIn(false);
       onLoginSuccess(email);
-    }, 1200);
+    } catch (error: any) {
+      setLoggingIn(false);
+      setErrorText(error.message || 'Unable to authenticate with SecureMind.');
+      triggerSystemNotification('Login rejected by SecureMind authentication service.', 'error');
+    }
   };
 
   return (

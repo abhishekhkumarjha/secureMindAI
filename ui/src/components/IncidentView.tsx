@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   AlertTriangle, ShieldAlert, CheckCircle2, ListTodo, Plus, 
   Terminal, User, Activity, Flame, ArrowRight, ShieldCheck, 
   Trash2, HelpCircle, FileText, Sparkles
 } from 'lucide-react';
 import { mockIncidents } from '../mockData';
+import { fetchIncidents, investigateIncident } from '../api';
 import { Incident, IncidentGraphNode, IncidentGraphEdge } from '../types';
 
 interface IncidentViewProps {
@@ -27,6 +28,18 @@ export default function IncidentView({
   const [newNote, setNewNote] = useState('');
   const [completedRecs, setCompletedRecs] = useState<Record<string, boolean>>({});
 
+  useEffect(() => {
+    fetchIncidents()
+      .then(data => {
+        if (data.length === 0) return;
+        setIncidents(data);
+        const nextIncident = data.find(inc => inc.id === selectedIncidentId) || data[0];
+        setActiveIncidentId(nextIncident.id);
+        setActiveNode(nextIncident.nodes[0] || null);
+      })
+      .catch(() => triggerSystemNotification('Using local demo incidents because the incident API is unavailable.', 'warn'));
+  }, [selectedIncidentId]);
+
   // Change active incident
   const handleIncidentChange = (id: string) => {
     setActiveIncidentId(id);
@@ -40,6 +53,7 @@ export default function IncidentView({
     e.preventDefault();
     if (!newNote.trim()) return;
 
+    const noteText = newNote;
     setIncidents(prevIncidents => 
       prevIncidents.map(inc => {
         if (inc.id === currentIncident.id) {
@@ -55,6 +69,11 @@ export default function IncidentView({
     
     setNewNote('');
     triggerSystemNotification('Investigation note added to forensic file.', 'success');
+    investigateIncident({ incident_id: currentIncident.id, note: noteText })
+      .then(updated => {
+        setIncidents(prev => prev.map(inc => inc.id === updated.id ? updated : inc));
+      })
+      .catch(() => triggerSystemNotification('Note saved locally; investigation API is unavailable.', 'warn'));
   };
 
   // Remove investigator note

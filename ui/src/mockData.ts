@@ -525,10 +525,10 @@ export const mockSystemStats = {
     { date: '05/24', blocked: 7420, critical: 4, high: 14, medium: 38 }
   ],
   geographies: [
-    { country: 'United States', ip: '192.110.12.83', hits: 1421, risk: 'low', type: 'Normal SSO' },
-    { country: 'Germany', ip: '45.143.203.111', hits: 840, risk: 'high', type: 'SSH Bruteforce Host' },
-    { country: 'Tor Network', ip: '185.220.101.44', hits: 312, risk: 'critical', type: 'Active SQLi Attacker' },
-    { country: 'Singapore', ip: '112.199.12.15', hits: 198, risk: 'medium', type: 'SSH Scanning Probe' },
-    { country: 'Brazil', ip: '200.41.9.92', hits: 110, risk: 'low', type: 'Webhook Listener' }
+    { country: 'India', ip: '103.21.244.0', hits: 1421, risk: 'low', type: 'Normal SSO' },
+    { country: 'Pakistan', ip: '103.28.222.0', hits: 840, risk: 'high', type: 'SSH Bruteforce Host' },
+    { country: 'Bangladesh', ip: '103.237.121.0', hits: 312, risk: 'critical', type: 'Active SQLi Attacker' },
+    { country: 'Sri Lanka', ip: '103.10.124.0', hits: 198, risk: 'medium', type: 'SSH Scanning Probe' },
+    { country: 'Nepal', ip: '103.58.34.0', hits: 110, risk: 'low', type: 'Webhook Listener' }
   ]
 };

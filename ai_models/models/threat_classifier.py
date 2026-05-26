@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, Optional
+from importlib import import_module
+from typing import Any, Dict, Optional, cast
 
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
@@ -22,7 +22,7 @@ from ..utils.persistence import load_joblib, save_joblib
 logger = get_logger(__name__)
 
 try:
-    from xgboost import XGBClassifier
+    XGBClassifier: Any = getattr(import_module("xgboost"), "XGBClassifier")
 except ImportError:  # pragma: no cover
     XGBClassifier = None
 
@@ -41,8 +41,8 @@ class ThreatModelResult:
 class ThreatClassifier:
     def __init__(self) -> None:
         self.rf_model: Optional[RandomForestClassifier] = None
-        self.xgb_model: Optional[XGBClassifier] = None
-        self.best_model: Optional[RandomForestClassifier] = None
+        self.xgb_model: Any | None = None
+        self.best_model: Any | None = None
         self.label_encoder: Optional[LabelEncoder] = None
 
     def train(
@@ -66,16 +66,17 @@ class ThreatClassifier:
 
         if XGBClassifier is not None:
             logger.info("Training XGBoost classifier")
-            self.xgb_model = XGBClassifier(
+            xgb_model = XGBClassifier(
                 use_label_encoder=False,
                 objective="multi:softprob",
                 eval_metric="mlogloss",
                 random_state=DEFAULT_RANDOM_STATE,
             )
-            self.xgb_model.fit(X_train, y_train)
-            xgb_result = self.evaluate_model(self.xgb_model, X_val, y_val, "XGBoost")
+            xgb_model.fit(X_train, y_train)
+            self.xgb_model = xgb_model
+            xgb_result = self.evaluate_model(xgb_model, X_val, y_val, "XGBoost")
             results["XGBoost"] = xgb_result
-            save_joblib(self.xgb_model, THREAT_XGB_MODEL)
+            save_joblib(xgb_model, THREAT_XGB_MODEL)
         else:
             logger.warning("XGBoost is not installed. Skipping XGBoost training.")
 
@@ -92,12 +93,25 @@ class ThreatClassifier:
         model_name: str,
     ) -> ThreatModelResult:
         y_pred = model.predict(X_val)
-        accuracy = accuracy_score(y_val, y_pred)
-        precision = precision_score(y_val, y_pred, average="weighted", zero_division=0)
-        recall = recall_score(y_val, y_pred, average="weighted", zero_division=0)
-        f1 = f1_score(y_val, y_pred, average="weighted", zero_division=0)
+        accuracy = float(accuracy_score(y_val, y_pred))
+        precision = float(precision_score(y_val, y_pred, average="weighted", zero_division=0))
+        recall = float(recall_score(y_val, y_pred, average="weighted", zero_division=0))
+        f1 = float(f1_score(y_val, y_pred, average="weighted", zero_division=0))
         cm = confusion_matrix(y_val, y_pred)
-        report = classification_report(y_val, y_pred, target_names=self.label_encoder.classes_, zero_division=0)
+        if self.label_encoder is None:
+            raise RuntimeError("Threat label encoder is required before model evaluation")
+        labels = np.arange(len(self.label_encoder.classes_))
+        report = cast(
+            str,
+            classification_report(
+                y_val,
+                y_pred,
+                labels=labels,
+                target_names=self.label_encoder.classes_,
+                zero_division=0,
+                output_dict=False,
+            ),
+        )
         logger.info(
             "%s evaluation: accuracy=%.4f precision=%.4f recall=%.4f f1=%.4f",
             model_name,
@@ -144,19 +158,28 @@ class ThreatClassifier:
         if self.best_model is None:
             self.load_best_model()
 
-        if self.label_encoder is None:
+        model = self.best_model
+        label_encoder = self.label_encoder
+        if model is None:
+            raise RuntimeError("Threat model is not loaded for prediction")
+        if label_encoder is None:
             raise RuntimeError("Threat label encoder is not loaded for prediction")
 
         X = np.atleast_2d(X)
-        y_pred = self.best_model.predict(X)
+        y_pred = np.asarray(model.predict(X))
         if y_pred.size == 0:
             raise ValueError("Input data for prediction is empty")
 
-        label = self.label_encoder.inverse_transform([y_pred[0]])[0]
+        predicted_class = int(y_pred[0])
+        label = label_encoder.inverse_transform([predicted_class])[0]
         confidence = 1.0
-        if hasattr(self.best_model, "predict_proba"):
-            probabilities = self.best_model.predict_proba(X)
-            confidence = float(probabilities[0, y_pred[0]])
+        if hasattr(model, "predict_proba"):
+            probabilities = model.predict_proba(X)
+            model_classes = getattr(model, "classes_", np.arange(probabilities.shape[1]))
+            class_matches = np.where(model_classes == predicted_class)[0]
+            if class_matches.size == 0:
+                raise ValueError(f"Predicted class {predicted_class} was not found in model probability classes.")
+            confidence = float(probabilities[0, class_matches[0]])
 
         return {
             "prediction": label,

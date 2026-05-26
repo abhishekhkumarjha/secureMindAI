@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { 
   Terminal, Search, Download, ChevronDown, ChevronUp, Filter,
   ShieldCheck, ShieldAlert, AlertTriangle, PlayCircle, Minimize2, Copy, Check
 } from 'lucide-react';
 import { mockLogs } from '../mockData';
+import { fetchLogs } from '../api';
 import { SecurityLog, SeverityType } from '../types';
 
 interface LogsViewProps {
@@ -19,9 +20,18 @@ export default function LogsView({ triggerSystemNotification }: LogsViewProps) {
   const [actionFilter, setActionFilter] = useState<string>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  useEffect(() => {
+    fetchLogs()
+      .then(data => {
+        setLogs(data);
+        if (data[0]) setExpandedLogId(data[0].id);
+      })
+      .catch(() => triggerSystemNotification('Using local demo logs because the log API is unavailable.', 'warn'));
+  }, []);
+
   // Generate unique filter selectors
-  const logTypes = ['all', ...Array.from(new Set(mockLogs.map(l => l.type)))];
-  const logActions = ['all', ...Array.from(new Set(mockLogs.map(l => l.action)))];
+  const logTypes = ['all', ...Array.from(new Set(logs.map(l => l.type)))];
+  const logActions = ['all', ...Array.from(new Set(logs.map(l => l.action)))];
 
   // Logs filters evaluation
   const filteredLogs = logs.filter(log => {
