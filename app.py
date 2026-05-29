@@ -2,29 +2,87 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hashlib
 import hmac
+import os
 from pathlib import Path
 import secrets
 from typing import Any, Dict, List, Literal, Optional
+import uuid
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from ai_models.config import ANOMALY_MODEL, LOGIN_MODEL, LOGIN_PREPROCESSOR, THREAT_BEST_MODEL, THREAT_LABEL_ENCODER
 from ai_models.services import detect_anomaly, detect_login_behavior, predict_threat
+from logging_config import get_logger
 
-app = FastAPI(title="SecureMind AI", version="1.0.0")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+# Load configuration
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+ALLOWED_ORIGINS = [
+    origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost,http://127.0.0.1").split(",")
+]
+RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
+RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "100"))
+RATE_LIMIT_PERIOD = int(os.getenv("RATE_LIMIT_PERIOD", "3600"))
+
+logger = get_logger(__name__)
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address) if RATE_LIMIT_ENABLED else None
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="SecureMind AI",
+    version="1.0.0",
+    description="AI-Powered Cybersecurity Threat Detection Platform",
+    debug=DEBUG,
 )
 
+# Security Middleware - Trusted Host
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_ORIGINS)
+
+# CORS Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
+# Rate limiting
+if RATE_LIMIT_ENABLED:
+    app.state.limiter = limiter
+    app.add_exception_handler(Exception, lambda request, exc: HTTPException(status_code=429, detail="Rate limit exceeded"))
+
 UI_DIST_DIR = Path(__file__).resolve().parent / "ui" / "dist"
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Add security headers to all responses."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+    return response
+
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    """Add request ID for tracing."""
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
 
 
 class ThreatRequest(BaseModel):
@@ -223,14 +281,38 @@ def _prediction_error(error: Exception) -> HTTPException:
 
 
 @app.get("/api/health")
-def health() -> Dict[str, str]:
-    return {"status": "ok", "service": "SecureMind AI"}
+def health() -> Dict[str, Any]:
+    """Production health check endpoint with model status."""
+    threat_ready = THREAT_BEST_MODEL.exists() and THREAT_LABEL_ENCODER.exists()
+    anomaly_ready = ANOMALY_MODEL.exists()
+    login_ready = LOGIN_MODEL.exists() and LOGIN_PREPROCESSOR.exists()
+    
+    all_ready = threat_ready and anomaly_ready and login_ready
+    
+    response = {
+        "status": "healthy" if all_ready else "degraded",
+        "timestamp": _now_iso(),
+        "models": {
+            "threat": {"ready": threat_ready},
+            "anomaly": {"ready": anomaly_ready},
+            "login": {"ready": login_ready},
+        },
+    }
+    
+    logger.info(f"Health check - Status: {response['status']}")
+    
+    if not all_ready:
+        logger.warning(f"Missing models: threat={not threat_ready}, anomaly={not anomaly_ready}, login={not login_ready}")
+    
+    return response
 
 
 @app.post("/register")
 def register(request: RegisterRequest) -> Dict[str, Any]:
+    """User registration endpoint."""
     email = request.email.strip().lower()
     if email in USERS:
+        logger.warning(f"Registration attempt with existing email: {email}")
         raise HTTPException(status_code=409, detail="User already exists")
     USERS[email] = {
         "name": request.name.strip(),
@@ -238,19 +320,23 @@ def register(request: RegisterRequest) -> Dict[str, Any]:
         "role": request.role,
         "password_hash": _hash_password(request.password),
     }
+    logger.info(f"User registered: {email} with role {request.role}")
     return {"message": "User registered", "email": email, "role": request.role}
 
 
 @app.post("/login")
 def login(request: AuthRequest) -> Dict[str, Any]:
+    """User login endpoint with token generation."""
     email = request.email.strip().lower()
     user = USERS.get(email)
     if user is None or not hmac.compare_digest(user["password_hash"], _hash_password(request.password)):
+        logger.warning(f"Failed login attempt for email: {email}")
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = secrets.token_urlsafe(32)
     SESSIONS[token] = email
     profile = user.copy()
     profile.pop("password_hash", None)
+    logger.info(f"User logged in: {email}")
     return {"access_token": token, "token_type": "bearer", "user": profile}
 
 

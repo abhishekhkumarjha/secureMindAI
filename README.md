@@ -11,45 +11,82 @@ This repository contains the SecureMind AI machine learning module for cybersecu
 - `ai_models/evaluation/` - Evaluation report generation and plotting utilities.
 - `ai_models/trained_models/` - Output folder for serialized models.
 
-## Usage
+## Quick Start (Development)
 
-1. Place CSV datasets in `ai_models/datasets/` or set environment variables in `.env.example`.
+1. Place CSV datasets in `datasets/` or set environment variables in `.env`.
 2. Install Python requirements:
    ```bash
    pip install -r requirements.txt
    ```
-   For the optional TensorFlow LSTM login model, use Python 3.10-3.12 and install:
+   For the optional TensorFlow LSTM login model (Python 3.10-3.12):
    ```bash
    pip install -r requirements-optional.txt
    ```
-3. Install the UI dependencies:
+3. Install UI dependencies:
    ```bash
-   cd ui
-   npm install
+   cd ui && npm install && npm run build && cd ..
    ```
-4. Build the React UI:
-   ```bash
-   npm run build
-   ```
-5. Train the models after adding the datasets:
+4. Train models:
    ```bash
    python -m ai_models.train
    ```
-6. Start the SecureMind UI backend:
+5. Start development server:
    ```bash
-   cd ..
    uvicorn app:app --reload
    ```
-7. Open the browser at `http://127.0.0.1:8000` to use the integrated SecureMind UI.
+6. Access at `http://127.0.0.1:8000`
+
+## Production Deployment
+
+### Docker Deployment (Recommended)
+
+```bash
+# Build and start with docker-compose
+docker-compose up -d
+
+# Check health
+curl http://localhost:8000/api/health
+
+# View logs
+docker-compose logs -f securemind-api
+```
+
+### Configuration
+
+Create a `.env` file with production values:
+
+```env
+DEBUG=false
+LOG_LEVEL=INFO
+API_HOST=0.0.0.0
+API_PORT=8000
+ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_REQUESTS=100
+```
+
+**Important**: Change `SECRET_KEY` to a secure random value in production.
+
+### Full Deployment Guide
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for comprehensive production setup including:
+- Nginx reverse proxy configuration
+- HTTPS/TLS setup
+- Kubernetes deployment
+- Monitoring and health checks
+- Backup and recovery procedures
+- Performance tuning
 
 ## Prediction API
 
-- `GET /api/health`
-- `GET /api/models/status`
-- `POST /api/predict/threat` with `{ "features": [number, ...] }`
-- `POST /api/predict/anomaly` with `{ "features": [number, ...] }`
-- `POST /api/predict/login` with login behavior fields
+- `GET /api/health` - Health check with model status
+- `GET /api/models/status` - Detailed model availability
+- `POST /api/predict/threat` - Threat classification (40 features)
+- `POST /api/predict/anomaly` - Anomaly detection (39 features)
+- `POST /api/predict/login` - Login behavior detection
 
-Each returns a JSON-compatible dictionary with `prediction`, `confidence`, and `risk_score`.
+## API Documentation
 
-The React UI includes an AI Model Console in the Threats page that calls all three prediction endpoints. If model artifacts are missing, the API returns `503` and the UI shows a training reminder instead of failing silently.
+- **Interactive API Docs**: `http://localhost:8000/docs` (Swagger UI)
+- **Alternative Docs**: `http://localhost:8000/redoc` (ReDoc)
+- **OpenAPI Schema**: `http://localhost:8000/openapi.json`

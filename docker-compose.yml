@@ -1,0 +1,32 @@
+version: '3.9'
+
+services:
+  securemind-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: securemind-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    volumes:
+      - ./ai_models/trained_models:/app/ai_models/trained_models
+      - ./datasets:/app/datasets:ro
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - securemind-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  securemind-network:
+    driver: bridge
