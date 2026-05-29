@@ -412,7 +412,7 @@ if not UI_DIST_DIR.exists():
             <textarea id="threat-features" rows="4">[0.1, 1.0, 0.0, 5.2]</textarea>
             <button onclick="submitThreat()">Predict Threat</button>
             <div id="threat-result" class="output"></div>
-            <p>Note: Threat model expects a numeric feature array with the same order used during training.</p>
+            <p>Note: Threat model expects 40 numeric features in the same order used during training.</p>
         </div>
 
         <div class="card">
@@ -421,7 +421,7 @@ if not UI_DIST_DIR.exists():
             <textarea id="anomaly-features" rows="4">[1.0, 0.5, 10.0, 0.0]</textarea>
             <button onclick="submitAnomaly()">Detect Anomaly</button>
             <div id="anomaly-result" class="output"></div>
-            <p>Note: Anomaly model expects a numeric feature array with the same columns as the CICIDS2017 normal training data.</p>
+            <p>Note: Anomaly model expects 39 numeric features in the same columns and order as the CICIDS2017 normal training data.</p>
         </div>
 
         <div class="card">

@@ -1,49 +1,21 @@
 from __future__ import annotations
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 import numpy as np
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 
 from ..config import LOGIN_MODEL, LOGIN_PREPROCESSOR, DEFAULT_RANDOM_STATE
 from ..utils.logger import get_logger
-from ..utils.persistence import load_pickle, save_pickle
+from ..utils.persistence import load_joblib, load_pickle, save_joblib, save_pickle
 
 logger = get_logger(__name__)
 
 
-def _load_keras():
-    try:
-        from tensorflow.keras.layers import Dense, LSTM
-        from tensorflow.keras.models import Sequential, load_model
-        from tensorflow.keras.optimizers import Adam
-        from tensorflow.keras.callbacks import EarlyStopping
-        return Dense, LSTM, Sequential, load_model, Adam, EarlyStopping
-    except ImportError as error:
-        raise ImportError("TensorFlow is required for the login behavior LSTM model.") from error
-
-
 class LoginBehaviorDetector:
     def __init__(self) -> None:
-        self.model: Optional[Any] = None
+        self.model: Optional[RandomForestClassifier] = None
         self.preprocessor: Optional[Dict[str, Any]] = None
-
-    def build_model(self, input_shape: tuple[int, int], num_classes: int) -> Any:
-        Dense, LSTM, Sequential, _, Adam, _ = _load_keras()
-        model = Sequential(
-            [
-                LSTM(64, input_shape=input_shape, return_sequences=False),
-                Dense(32, activation="relu"),
-                Dense(num_classes, activation="softmax"),
-            ]
-        )
-        model.compile(
-            optimizer=Adam(learning_rate=0.001),
-            loss="sparse_categorical_crossentropy",
-            metrics=["accuracy"],
-        )
-        logger.info("Built LSTM model with input shape %s", input_shape)
-        return model
 
     def train(
         self,
@@ -55,23 +27,13 @@ class LoginBehaviorDetector:
         scaler: Any,
         feature_columns: list[str],
     ) -> None:
-        num_classes = len(label_encoder.classes_)
-        input_shape = (X_train.shape[1], 1)
-        X_train_reshaped = X_train.reshape((-1, X_train.shape[1], 1))
-        X_val_reshaped = X_val.reshape((-1, X_val.shape[1], 1))
-
-        self.model = self.build_model(input_shape, num_classes)
-        _, _, _, _, _, EarlyStopping = _load_keras()
-        callback = EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=True)
-        self.model.fit(
-            X_train_reshaped,
-            y_train,
-            validation_data=(X_val_reshaped, y_val),
-            epochs=50,
-            batch_size=32,
-            callbacks=[callback],
-            verbose=0,
+        self.model = RandomForestClassifier(
+            n_estimators=100,
+            n_jobs=-1,
+            random_state=DEFAULT_RANDOM_STATE,
         )
+        self.model.fit(X_train, y_train)
+
         self.preprocessor = {
             "label_encoder": label_encoder,
             "scaler": scaler,
@@ -84,14 +46,13 @@ class LoginBehaviorDetector:
     def save(self) -> None:
         if self.model is None:
             raise ValueError("No model available to save")
-        self.model.save(LOGIN_MODEL)
-        logger.info("Saved login LSTM model to %s", LOGIN_MODEL)
+        save_joblib(self.model, LOGIN_MODEL)
+        logger.info("Saved login model to %s", LOGIN_MODEL)
 
     def load(self) -> None:
         if not LOGIN_MODEL.exists() or not LOGIN_PREPROCESSOR.exists():
             raise FileNotFoundError("Login behavior model or preprocessor not found. Train the model before inference.")
-        _, _, _, load_model, _, _ = _load_keras()
-        self.model = load_model(LOGIN_MODEL)
+        self.model = load_joblib(LOGIN_MODEL)
         self.preprocessor = load_pickle(LOGIN_PREPROCESSOR)
         logger.info("Loaded login detector and preprocessor from disk")
 
@@ -99,7 +60,7 @@ class LoginBehaviorDetector:
         if self.model is None or self.preprocessor is None:
             self.load()
 
-        scalar = self.preprocessor["scaler"]
+        scaler = self.preprocessor["scaler"]
         label_encoder = self.preprocessor["label_encoder"]
         feature_columns = self.preprocessor.get("feature_columns", [])
 
@@ -120,10 +81,8 @@ class LoginBehaviorDetector:
             else:
                 feature_vector[0, index] = 0.0
 
-        processed = scalar.transform(feature_vector)
-        processed = processed.reshape((1, processed.shape[1], 1))
-
-        probabilities = self.model.predict(processed, verbose=0)
+        processed = scaler.transform(feature_vector)
+        probabilities = self.model.predict_proba(processed)
         best_index = int(np.argmax(probabilities, axis=1)[0])
         prediction = label_encoder.inverse_transform([best_index])[0]
         confidence = float(probabilities[0, best_index])

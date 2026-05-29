@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from importlib import import_module
+import os
 from typing import Any, Dict, Optional, cast
 
 import numpy as np
@@ -13,9 +14,16 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 
-from ..config import DEFAULT_RANDOM_STATE, THREAT_BEST_MODEL, THREAT_LABEL_ENCODER, THREAT_RF_MODEL, THREAT_XGB_MODEL
+from ..config import (
+    DEFAULT_RANDOM_STATE,
+    THREAT_BEST_MODEL,
+    THREAT_LABEL_ENCODER,
+    THREAT_RF_MODEL,
+    THREAT_SCALER,
+    THREAT_XGB_MODEL,
+)
 from ..utils.logger import get_logger
 from ..utils.persistence import load_joblib, save_joblib
 
@@ -44,6 +52,7 @@ class ThreatClassifier:
         self.xgb_model: Any | None = None
         self.best_model: Any | None = None
         self.label_encoder: Optional[LabelEncoder] = None
+        self.scaler: Optional[StandardScaler] = None
 
     def train(
         self,
@@ -52,17 +61,39 @@ class ThreatClassifier:
         X_val: np.ndarray,
         y_val: np.ndarray,
         label_encoder: LabelEncoder,
+        scaler: StandardScaler,
     ) -> Dict[str, ThreatModelResult]:
         logger.info("Training Random Forest classifier")
-        self.rf_model = RandomForestClassifier(n_estimators=200, random_state=DEFAULT_RANDOM_STATE)
-        self.rf_model.fit(X_train, y_train)
+        total_estimators = int(os.getenv("THREAT_RF_TOTAL_ESTIMATORS", "200"))
+        step_estimators = int(os.getenv("THREAT_RF_STEP_ESTIMATORS", "20"))
+        if step_estimators <= 0:
+            step_estimators = total_estimators
+        step_estimators = min(step_estimators, total_estimators)
+
+        # Grow the forest in chunks so we can log visible progress.
+        # `warm_start=True` keeps previously trained trees as `n_estimators` increases.
+        self.rf_model = RandomForestClassifier(
+            n_estimators=step_estimators,
+            warm_start=True,
+            n_jobs=-1,
+            random_state=DEFAULT_RANDOM_STATE,
+        )
+
+        for n in range(step_estimators, total_estimators + 1, step_estimators):
+            self.rf_model.set_params(n_estimators=n)
+            logger.info("RandomForest progress: fitting %d/%d trees", n, total_estimators)
+            self.rf_model.fit(X_train, y_train)
+            logger.info("RandomForest progress: finished %d/%d trees", n, total_estimators)
 
         self.label_encoder = label_encoder
+        self.scaler = scaler
         results: Dict[str, ThreatModelResult] = {}
         rf_result = self.evaluate_model(self.rf_model, X_val, y_val, "RandomForest")
         results["RandomForest"] = rf_result
         save_joblib(self.rf_model, THREAT_RF_MODEL)
         save_joblib(self.label_encoder, THREAT_LABEL_ENCODER)
+        if self.scaler is not None:
+            save_joblib(self.scaler, THREAT_SCALER)
 
         if XGBClassifier is not None:
             logger.info("Training XGBoost classifier")
@@ -154,8 +185,33 @@ class ThreatClassifier:
         else:
             raise FileNotFoundError("Threat label encoder not found. Train the model before inference.")
 
-    def predict(self, X: np.ndarray) -> Dict[str, Any]:
+        if THREAT_SCALER.exists():
+            self.scaler = load_joblib(THREAT_SCALER)
+            logger.info("Loaded threat scaler from %s", THREAT_SCALER)
+        else:
+            raise FileNotFoundError("Threat scaler not found. Train the model before inference.")
+
+    def _prepare_input(self, X: np.ndarray) -> np.ndarray:
+        X = np.asarray(X, dtype=float)
+        if X.ndim == 1:
+            X = X.reshape(1, -1)
+
         if self.best_model is None:
+            self.load_best_model()
+        if self.best_model is None:
+            raise RuntimeError("Threat model is not loaded for prediction")
+
+        expected_features = getattr(self.best_model, "n_features_in_", None)
+        if expected_features is not None and X.shape[1] != expected_features:
+            raise ValueError(
+                f"Threat classifier expects {expected_features} features, but received {X.shape[1]}."
+            )
+        if self.scaler is None:
+            raise RuntimeError("Threat scaler is not loaded for prediction")
+        return self.scaler.transform(X)
+
+    def predict(self, X: np.ndarray) -> Dict[str, Any]:
+        if self.best_model is None or self.label_encoder is None or self.scaler is None:
             self.load_best_model()
 
         model = self.best_model
@@ -164,8 +220,10 @@ class ThreatClassifier:
             raise RuntimeError("Threat model is not loaded for prediction")
         if label_encoder is None:
             raise RuntimeError("Threat label encoder is not loaded for prediction")
+        if self.scaler is None:
+            raise RuntimeError("Threat scaler is not loaded for prediction")
 
-        X = np.atleast_2d(X)
+        X = self._prepare_input(X)
         y_pred = np.asarray(model.predict(X))
         if y_pred.size == 0:
             raise ValueError("Input data for prediction is empty")

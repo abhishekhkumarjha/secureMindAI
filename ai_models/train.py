@@ -1,8 +1,15 @@
 from __future__ import annotations
 import logging
+from pathlib import Path
 from typing import Dict
 
-from .config import CLASS_LABELS
+from .config import (
+    ANOMALY_MODEL,
+    LOGIN_MODEL,
+    LOGIN_PREPROCESSOR,
+    THREAT_BEST_MODEL,
+    THREAT_LABEL_ENCODER,
+)
 from .evaluation import save_classification_report, save_confusion_matrix, save_roc_curve
 from .models.anomaly_detector import AnomalyDetector
 from .models.login_detector import LoginBehaviorDetector
@@ -15,18 +22,28 @@ logger = get_logger(__name__)
 
 def train_threat_model() -> Dict[str, object]:
     logger.info("Starting threat classification training")
-    df = load_unsw_nb15()
+    df = load_cicids2017()
     preprocessor = DataPreprocessor()
-    dataset = preprocessor.preprocess_unsw_nb15(df)
+    dataset = preprocessor.preprocess_cicids2017(df)
 
     classifier = ThreatClassifier()
-    results = classifier.train(dataset.X_train, dataset.y_train, dataset.X_val, dataset.y_val, dataset.label_encoder)
+    results = classifier.train(
+        dataset.X_train,
+        dataset.y_train,
+        dataset.X_val,
+        dataset.y_val,
+        dataset.label_encoder,
+        dataset.scaler,
+    )
     if classifier.best_model is None:
         raise RuntimeError("Threat classification model training failed")
+    if dataset.label_encoder is None:
+        raise RuntimeError("Threat label encoder was not produced by preprocessing")
 
     y_pred = classifier.best_model.predict(dataset.X_test)
-    save_confusion_matrix(dataset.y_test, y_pred, CLASS_LABELS, "threat_confusion_matrix.png")
-    save_classification_report(dataset.y_test, y_pred, CLASS_LABELS, "threat_classification_report.txt")
+    class_labels = dataset.label_encoder.classes_.tolist()
+    save_confusion_matrix(dataset.y_test, y_pred, class_labels, "threat_confusion_matrix.png")
+    save_classification_report(dataset.y_test, y_pred, class_labels, "threat_classification_report.txt")
     if hasattr(classifier.best_model, "predict_proba"):
         proba = classifier.best_model.predict_proba(dataset.X_test)
         if proba.shape[1] == 2:
@@ -39,12 +56,12 @@ def train_threat_model() -> Dict[str, object]:
 
 def train_anomaly_model() -> None:
     logger.info("Starting anomaly detection training")
-    df = load_cicids2017()
+    df = load_unsw_nb15()
     preprocessor = DataPreprocessor()
-    X_normal, _, _ = preprocessor.preprocess_cicids2017(df)
+    X_normal, scaler = preprocessor.preprocess_unsw_nb15_for_anomaly(df)
 
     detector = AnomalyDetector()
-    detector.train(X_normal)
+    detector.train(X_normal, scaler)
     logger.info("Completed anomaly detection training")
 
 
@@ -68,18 +85,32 @@ def train_login_model() -> None:
 
 
 def main() -> None:
-    try:
-        train_threat_model()
-    except Exception as exc:
-        logger.exception("Threat model training failed: %s", exc)
-    try:
-        train_anomaly_model()
-    except Exception as exc:
-        logger.exception("Anomaly model training failed: %s", exc)
-    try:
-        train_login_model()
-    except Exception as exc:
-        logger.exception("Login behavior model training failed: %s", exc)
+    # Train threat model if not already trained
+    if THREAT_BEST_MODEL.exists() and THREAT_LABEL_ENCODER.exists():
+        logger.info("Threat model already exists. Skipping training.")
+    else:
+        try:
+            train_threat_model()
+        except Exception as exc:
+            logger.exception("Threat model training failed: %s", exc)
+
+    # Train anomaly model if not already trained
+    if ANOMALY_MODEL.exists():
+        logger.info("Anomaly model already exists. Skipping training.")
+    else:
+        try:
+            train_anomaly_model()
+        except Exception as exc:
+            logger.exception("Anomaly model training failed: %s", exc)
+
+    # Train login model if not already trained
+    if LOGIN_MODEL.exists() and LOGIN_PREPROCESSOR.exists():
+        logger.info("Login model already exists. Skipping training.")
+    else:
+        try:
+            train_login_model()
+        except Exception as exc:
+            logger.exception("Login behavior model training failed: %s", exc)
 
 
 if __name__ == "__main__":

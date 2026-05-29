@@ -18,9 +18,9 @@ export default function ThreatsView({ triggerSystemNotification }: ThreatsViewPr
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [inspectedThreat, setInspectedThreat] = useState<Threat | null>(mockThreats[0]);
-  const [predictionInput, setPredictionInput] = useState<string>('[0.1, 1.0, 0.0, 5.2]');
+  const [predictionInput, setPredictionInput] = useState<string>('[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]');
   const [predictionResult, setPredictionResult] = useState<PredictionResult | null>(null);
-  const [anomalyInput, setAnomalyInput] = useState<string>('[1.0, 0.5, 10.0, 0.0]');
+  const [anomalyInput, setAnomalyInput] = useState<string>('[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]');
   const [anomalyResult, setAnomalyResult] = useState<PredictionResult | null>(null);
   const [loginResult, setLoginResult] = useState<PredictionResult | null>(null);
   const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
