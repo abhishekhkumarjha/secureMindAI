@@ -277,7 +277,7 @@ def _classify_log_risk(log: SecurityLogRequest) -> Dict[str, Any]:
 
 def _prediction_error(error: Exception) -> HTTPException:
     if isinstance(error, (FileNotFoundError, ImportError)):
-        return HTTPException(status_code=503, detail=str(error))
+        return HTTPException(status_code=503, detail="ML models not available. Please train models or contact administrator.")
     if isinstance(error, ValueError):
         return HTTPException(status_code=400, detail=str(error))
     return HTTPException(status_code=500, detail="Prediction service failed. Check server logs for details.")

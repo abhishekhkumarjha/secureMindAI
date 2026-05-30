@@ -24,6 +24,9 @@ WORKDIR /app
 # Copy application code
 COPY . .
 
+# Train models if datasets are available
+RUN python -c "from ai_models.train import train_threat_model, train_anomaly_model, train_login_model; train_threat_model(); train_anomaly_model(); train_login_model()" || echo "Model training skipped (datasets not available)"
+
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
