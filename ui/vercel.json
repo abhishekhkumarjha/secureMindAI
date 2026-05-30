@@ -1,0 +1,15 @@
+{
+  "rewrites": [
+    { "source": "/favicon.ico", "destination": "/favicon.svg" },
+    { "source": "/login", "destination": "https://securemindai.onrender.com/login" },
+    { "source": "/register", "destination": "https://securemindai.onrender.com/register" },
+    { "source": "/profile", "destination": "https://securemindai.onrender.com/profile" },
+    { "source": "/api/(.*)", "destination": "https://securemindai.onrender.com/api/$1" },
+    { "source": "/logs", "destination": "https://securemindai.onrender.com/logs" },
+    { "source": "/threats", "destination": "https://securemindai.onrender.com/threats" },
+    { "source": "/incidents", "destination": "https://securemindai.onrender.com/incidents" },
+    { "source": "/investigate", "destination": "https://securemindai.onrender.com/investigate" },
+    { "source": "/detect", "destination": "https://securemindai.onrender.com/detect" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

@@ -6,6 +6,12 @@ import { defineConfig } from 'vite';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const backendProxy = {
+  target: process.env.VITE_DEV_API_PROXY || 'http://127.0.0.1:8000',
+  changeOrigin: true,
+  secure: false,
+};
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -17,20 +23,28 @@ export default defineConfig({
     hmr: process.env.DISABLE_HMR !== 'true',
     watch: process.env.DISABLE_HMR === 'true' ? null : {},
     proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
-        secure: false,
-      },
+      '/api': backendProxy,
+      '/login': backendProxy,
+      '/register': backendProxy,
+      '/profile': backendProxy,
+      '/logs': backendProxy,
+      '/threats': backendProxy,
+      '/incidents': backendProxy,
+      '/investigate': backendProxy,
+      '/detect': backendProxy,
     },
   },
   preview: {
     proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
-        secure: false,
-      },
+      '/api': backendProxy,
+      '/login': backendProxy,
+      '/register': backendProxy,
+      '/profile': backendProxy,
+      '/logs': backendProxy,
+      '/threats': backendProxy,
+      '/incidents': backendProxy,
+      '/investigate': backendProxy,
+      '/detect': backendProxy,
     },
   },
 });

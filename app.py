@@ -10,7 +10,6 @@ import uuid
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -26,6 +25,7 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 ALLOWED_ORIGINS = [
     origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost,http://127.0.0.1").split(",")
 ]
+CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", r"https://.*\.vercel\.app")
 RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "100"))
 RATE_LIMIT_PERIOD = int(os.getenv("RATE_LIMIT_PERIOD", "3600"))
@@ -43,13 +43,11 @@ app = FastAPI(
     debug=DEBUG,
 )
 
-# Security Middleware - Trusted Host
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_ORIGINS)
-
-# CORS Middleware
+# CORS Middleware (allow all Vercel preview/production URLs via regex)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],

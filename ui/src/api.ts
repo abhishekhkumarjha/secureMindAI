@@ -25,6 +25,34 @@ export interface LoginResult {
 
 const TOKEN_KEY = 'securemind_token';
 
+/** Production FastAPI backend (Render). */
+const DEFAULT_PRODUCTION_API = 'https://securemindai.onrender.com';
+
+function resolveApiBaseUrl(): string {
+  const fromEnv = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  if (fromEnv) return fromEnv;
+
+  if (typeof window !== 'undefined') {
+    const { hostname, protocol } = window.location;
+    // Local dev: Vite proxy handles API routes on the same origin.
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return '';
+    }
+    // Vercel / production: always call Render directly (no env var required).
+    if (hostname.endsWith('.vercel.app') || protocol === 'https:') {
+      return DEFAULT_PRODUCTION_API;
+    }
+  }
+
+  return '';
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
+
+function apiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`;
+}
+
 export function getAuthToken(): string | null {
   return window.localStorage.getItem(TOKEN_KEY);
 }
@@ -42,8 +70,8 @@ function authHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const response = await fetch(url, {
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(apiUrl(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
@@ -51,15 +79,15 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    const detail = payload?.detail || response.statusText || 'Request failed';
+    let detail = payload?.detail || response.statusText || 'Request failed';
     throw new Error(detail);
   }
 
   return response.json();
 }
 
-async function getJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { headers: authHeaders() });
+async function getJson<T>(path: string): Promise<T> {
+  const response = await fetch(apiUrl(path), { headers: authHeaders() });
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
     const detail = payload?.detail || response.statusText || 'Request failed';
@@ -79,7 +107,7 @@ export function getProfile(): Promise<{ user: AuthUser }> {
 }
 
 export async function getModelStatus(): Promise<ModelStatus> {
-  const response = await fetch('/api/models/status');
+  const response = await fetch(apiUrl('/api/models/status'));
   if (!response.ok) {
     throw new Error('Unable to load model status');
   }
