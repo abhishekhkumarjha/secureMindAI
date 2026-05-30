@@ -38,8 +38,12 @@ function resolveApiBaseUrl(): string {
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return '';
     }
-    // Vercel / production: always call Render directly (no env var required).
-    if (hostname.endsWith('.vercel.app') || protocol === 'https:') {
+    // Vercel: use relative URLs to leverage vercel.json rewrites
+    if (hostname.endsWith('.vercel.app')) {
+      return '';
+    }
+    // Other production: call Render directly
+    if (protocol === 'https:') {
       return DEFAULT_PRODUCTION_API;
     }
   }

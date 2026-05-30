@@ -23,9 +23,9 @@ from logging_config import get_logger
 # Load configuration
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 ALLOWED_ORIGINS = [
-    origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost,http://127.0.0.1").split(",")
+    origin.strip().rstrip("/") for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost,http://127.0.0.1").split(",")
 ]
-CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", r"https://.*\.vercel\.app")
+CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", "")
 RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "100"))
 RATE_LIMIT_PERIOD = int(os.getenv("RATE_LIMIT_PERIOD", "3600"))
@@ -44,14 +44,15 @@ app = FastAPI(
 )
 
 # CORS Middleware (allow all Vercel preview/production URLs via regex)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=CORS_ORIGIN_REGEX,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Authorization", "Content-Type"],
-)
+cors_config = {
+    "allow_origins": ALLOWED_ORIGINS,
+    "allow_credentials": True,
+    "allow_methods": ["GET", "POST", "DELETE"],
+    "allow_headers": ["Authorization", "Content-Type"],
+}
+if CORS_ORIGIN_REGEX:
+    cors_config["allow_origin_regex"] = CORS_ORIGIN_REGEX
+app.add_middleware(CORSMiddleware, **cors_config)
 
 # Rate limiting
 if RATE_LIMIT_ENABLED:
