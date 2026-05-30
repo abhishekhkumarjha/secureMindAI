@@ -25,7 +25,10 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 ALLOWED_ORIGINS = [
     origin.strip().rstrip("/") for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost,http://127.0.0.1").split(",")
 ]
-CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", "")
+# Add wildcard as fallback for development/preview deployments
+if "*" not in ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS.append("*")
+CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", r"https://.*\.vercel\.app")
 RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "100"))
 RATE_LIMIT_PERIOD = int(os.getenv("RATE_LIMIT_PERIOD", "3600"))
@@ -50,6 +53,7 @@ cors_config = {
     "allow_methods": ["GET", "POST", "DELETE"],
     "allow_headers": ["Authorization", "Content-Type"],
 }
+# Always add regex for Vercel domains
 if CORS_ORIGIN_REGEX:
     cors_config["allow_origin_regex"] = CORS_ORIGIN_REGEX
 app.add_middleware(CORSMiddleware, **cors_config)
