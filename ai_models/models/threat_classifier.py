@@ -97,9 +97,11 @@ class ThreatClassifier:
 
         if XGBClassifier is not None:
             logger.info("Training XGBoost classifier")
+            num_classes = len(label_encoder.classes_)
             xgb_model = XGBClassifier(
                 use_label_encoder=False,
                 objective="multi:softprob",
+                num_class=num_classes,
                 eval_metric="mlogloss",
                 random_state=DEFAULT_RANDOM_STATE,
             )

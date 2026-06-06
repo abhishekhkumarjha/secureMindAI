@@ -83,7 +83,7 @@ export default function ThreatsView({ triggerSystemNotification }: ThreatsViewPr
       triggerSystemNotification('Threat classifier returned a prediction successfully.', 'success');
     } catch (error: any) {
       setPredictionError(error.message);
-      triggerSystemNotification('Threat classifier call failed. Check model files and input format.', 'error');
+      triggerSystemNotification(`Threat classifier failed: ${error.message}`, 'error');
     } finally {
       setIsPredicting(false);
     }
@@ -100,7 +100,7 @@ export default function ThreatsView({ triggerSystemNotification }: ThreatsViewPr
       triggerSystemNotification('Anomaly detector returned a prediction successfully.', 'success');
     } catch (error: any) {
       setPredictionError(error.message);
-      triggerSystemNotification('Anomaly detector call failed. Check model files and input format.', 'error');
+      triggerSystemNotification(`Anomaly detector failed: ${error.message}`, 'error');
     } finally {
       setIsPredicting(false);
     }
@@ -117,7 +117,7 @@ export default function ThreatsView({ triggerSystemNotification }: ThreatsViewPr
       triggerSystemNotification('Login behavior model returned a prediction successfully.', 'success');
     } catch (error: any) {
       setPredictionError(error.message);
-      triggerSystemNotification('Login behavior model call failed. Check TensorFlow and trained model files.', 'error');
+      triggerSystemNotification(`Login behavior model failed: ${error.message}`, 'error');
     } finally {
       setIsPredicting(false);
     }

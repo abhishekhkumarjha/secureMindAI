@@ -16,7 +16,15 @@ from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from ai_models.config import ANOMALY_MODEL, LOGIN_MODEL, LOGIN_PREPROCESSOR, THREAT_BEST_MODEL, THREAT_LABEL_ENCODER
+from ai_models.config import (
+    ANOMALY_MODEL,
+    ANOMALY_SCALER,
+    LOGIN_MODEL,
+    LOGIN_PREPROCESSOR,
+    THREAT_BEST_MODEL,
+    THREAT_LABEL_ENCODER,
+    THREAT_SCALER,
+)
 from ai_models.services import detect_anomaly, detect_login_behavior, predict_threat
 from logging_config import get_logger
 
@@ -277,7 +285,7 @@ def _classify_log_risk(log: SecurityLogRequest) -> Dict[str, Any]:
 
 def _prediction_error(error: Exception) -> HTTPException:
     if isinstance(error, (FileNotFoundError, ImportError)):
-        return HTTPException(status_code=503, detail="ML models not available. Please train models or contact administrator.")
+        return HTTPException(status_code=503, detail=str(error))
     if isinstance(error, ValueError):
         return HTTPException(status_code=400, detail=str(error))
     return HTTPException(status_code=500, detail="Prediction service failed. Check server logs for details.")
@@ -286,8 +294,8 @@ def _prediction_error(error: Exception) -> HTTPException:
 @app.get("/api/health")
 def health() -> Dict[str, Any]:
     """Production health check endpoint with model status."""
-    threat_ready = THREAT_BEST_MODEL.exists() and THREAT_LABEL_ENCODER.exists()
-    anomaly_ready = ANOMALY_MODEL.exists()
+    threat_ready = THREAT_BEST_MODEL.exists() and THREAT_LABEL_ENCODER.exists() and THREAT_SCALER.exists()
+    anomaly_ready = ANOMALY_MODEL.exists() and ANOMALY_SCALER.exists()
     login_ready = LOGIN_MODEL.exists() and LOGIN_PREPROCESSOR.exists()
     
     all_ready = threat_ready and anomaly_ready and login_ready
@@ -350,23 +358,26 @@ def profile(authorization: str | None = Header(default=None)) -> Dict[str, Any]:
 
 @app.get("/api/models/status")
 def model_status() -> Dict[str, Any]:
-    threat_ready = THREAT_BEST_MODEL.exists() and THREAT_LABEL_ENCODER.exists()
-    anomaly_ready = ANOMALY_MODEL.exists()
+    threat_files = [THREAT_BEST_MODEL, THREAT_LABEL_ENCODER, THREAT_SCALER]
+    anomaly_files = [ANOMALY_MODEL, ANOMALY_SCALER]
+    login_files = [LOGIN_MODEL, LOGIN_PREPROCESSOR]
+    threat_ready = all(path.exists() for path in threat_files)
+    anomaly_ready = all(path.exists() for path in anomaly_files)
     login_ready = LOGIN_MODEL.exists() and LOGIN_PREPROCESSOR.exists()
     return {
         "ready": threat_ready and anomaly_ready and login_ready,
         "models": {
             "threat": {
                 "ready": threat_ready,
-                "missing": [str(path) for path in [THREAT_BEST_MODEL, THREAT_LABEL_ENCODER] if not path.exists()],
+                "missing": [str(path) for path in threat_files if not path.exists()],
             },
             "anomaly": {
                 "ready": anomaly_ready,
-                "missing": [str(ANOMALY_MODEL)] if not anomaly_ready else [],
+                "missing": [str(path) for path in anomaly_files if not path.exists()],
             },
             "login": {
                 "ready": login_ready,
-                "missing": [str(path) for path in [LOGIN_MODEL, LOGIN_PREPROCESSOR] if not path.exists()],
+                "missing": [str(path) for path in login_files if not path.exists()],
             },
         },
     }

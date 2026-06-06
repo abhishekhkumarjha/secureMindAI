@@ -1,12 +1,6 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
-
-# Run and deploy your AI Studio app
+# SecureMind AI UI
 
 This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/40ad072f-23b5-4287-b585-aa2f57eb59a0
 
 ## Run Locally
 

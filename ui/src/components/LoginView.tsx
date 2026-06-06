@@ -96,8 +96,9 @@ export default function LoginView({ onLoginSuccess, triggerSystemNotification }:
       onLoginSuccess(email);
     } catch (error: any) {
       setLoggingIn(false);
-      setErrorText(error.message || 'Unable to authenticate with SecureMind.');
-      triggerSystemNotification('Login rejected by SecureMind authentication service.', 'error');
+      const message = error.message || 'Unable to authenticate with SecureMind.';
+      setErrorText(message);
+      triggerSystemNotification(`Login rejected: ${message}`, 'error');
     }
   };
 

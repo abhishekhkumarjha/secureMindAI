@@ -29,12 +29,9 @@ const TOKEN_KEY = 'securemind_token';
 const DEFAULT_PRODUCTION_API = 'https://securemindai.onrender.com';
 
 function resolveApiBaseUrl(): string {
-  const fromEnv = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-  if (fromEnv) return fromEnv;
-
   if (typeof window !== 'undefined') {
     const { hostname, protocol } = window.location;
-    // Local dev: Vite proxy handles API routes on the same origin.
+    // Local dev / FastAPI static serving: always use the current origin.
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return '';
     }
@@ -47,6 +44,9 @@ function resolveApiBaseUrl(): string {
       return DEFAULT_PRODUCTION_API;
     }
   }
+
+  const fromEnv = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  if (fromEnv) return fromEnv;
 
   return '';
 }

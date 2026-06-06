@@ -5,10 +5,12 @@ from typing import Dict
 
 from .config import (
     ANOMALY_MODEL,
+    ANOMALY_SCALER,
     LOGIN_MODEL,
     LOGIN_PREPROCESSOR,
     THREAT_BEST_MODEL,
     THREAT_LABEL_ENCODER,
+    THREAT_SCALER,
 )
 from .evaluation import save_classification_report, save_confusion_matrix, save_roc_curve
 from .models.anomaly_detector import AnomalyDetector
@@ -86,7 +88,7 @@ def train_login_model() -> None:
 
 def main() -> None:
     # Train threat model if not already trained
-    if THREAT_BEST_MODEL.exists() and THREAT_LABEL_ENCODER.exists():
+    if THREAT_BEST_MODEL.exists() and THREAT_LABEL_ENCODER.exists() and THREAT_SCALER.exists():
         logger.info("Threat model already exists. Skipping training.")
     else:
         try:
@@ -95,7 +97,7 @@ def main() -> None:
             logger.exception("Threat model training failed: %s", exc)
 
     # Train anomaly model if not already trained
-    if ANOMALY_MODEL.exists():
+    if ANOMALY_MODEL.exists() and ANOMALY_SCALER.exists():
         logger.info("Anomaly model already exists. Skipping training.")
     else:
         try:
