@@ -90,3 +90,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for comprehensive production setup including:
 - **Interactive API Docs**: `http://localhost:8000/docs` (Swagger UI)
 - **Alternative Docs**: `http://localhost:8000/redoc` (ReDoc)
 - **OpenAPI Schema**: `http://localhost:8000/openapi.json`
+
+
+## Demo Video: https://1drv.ms/v/c/50ACD056033FBCD8/IQDYzanPDCMER5z4tFt1GgAUAYZV3pYs5y3eCCOACxfkPPs?e=XKgtAt
+
