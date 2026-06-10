@@ -11,7 +11,7 @@ This repository contains the SecureMind AI machine learning module for cybersecu
 - `ai_models/evaluation/` - Evaluation report generation and plotting utilities.
 - `ai_models/trained_models/` - Output folder for serialized models.
 
-## Quick Start (Development)
+## Quick Start 
 
 1. Place CSV datasets in `datasets/` or set environment variables in `.env`.
 2. Install Python requirements:
@@ -38,7 +38,7 @@ This repository contains the SecureMind AI machine learning module for cybersecu
 
 ## Production Deployment
 
-### Docker Deployment (Recommended)
+### Docker Deployment 
 
 ```bash
 # Build and start with docker-compose
